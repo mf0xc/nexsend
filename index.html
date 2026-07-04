@@ -25,6 +25,7 @@
   --icon-color: #54656f;
   --error: #ef4444;
   --link: #008069;
+  --warning: #f59e0b;
 }
 [data-theme="dark"] {
   --bg: #0a1014;
@@ -46,6 +47,7 @@
   --icon-color: #aebac1;
   --error: #ef4444;
   --link: #00a884;
+  --warning: #fbbf24;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
@@ -107,8 +109,19 @@ body {
 }
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-.error-msg { color: var(--error); font-size: 13px; margin-bottom: 12px; display: none; }
+.error-msg { color: var(--error); font-size: 13px; margin-bottom: 12px; display: none; white-space: pre-line; }
 .success-msg { color: var(--primary); font-size: 13px; margin-bottom: 12px; display: none; }
+.warning-box { 
+  background: rgba(245, 158, 11, 0.1); 
+  border: 1px solid var(--warning); 
+  color: var(--warning);
+  padding: 10px 12px; 
+  border-radius: 8px; 
+  font-size: 12px; 
+  margin-bottom: 16px; 
+  display: none;
+  line-height: 1.6;
+}
 
 /* ========== APP SCREEN ========== */
 .app-screen { display: none; height: 100vh; width: 100vw; }
@@ -380,6 +393,10 @@ body {
         <button class="auth-tab active" data-tab="login">تسجيل الدخول</button>
         <button class="auth-tab" data-tab="register">إنشاء حساب</button>
       </div>
+      
+      <!-- Connectivity Warning -->
+      <div class="warning-box" id="connectivity-warning"></div>
+      
       <form id="login-form">
         <div class="error-msg" id="login-error"></div>
         <div class="form-group">
@@ -495,6 +512,69 @@ const SUPABASE_URL = 'https://woslwalvstvsynxoqeab.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indvc2x3YWxzdHZ0c3lueG9xZWFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTQ2MTYsImV4cCI6MjA5ODczMDYxNn0.rfCqKjKjvq6fcUlYyVoYDGK0Wyfr7fjc6Z3BJ67UUOk';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ==================== DIAGNOSTICS ====================
+async function testConnectivity() {
+  const warningEl = document.getElementById('connectivity-warning');
+  const results = [];
+  
+  // Test 1: Can we reach Supabase at all?
+  try {
+    const resp = await fetch(SUPABASE_URL, { method: 'HEAD', mode: 'no-cors' });
+    results.push('✅ Supabase URL reachable (network layer)');
+  } catch (e) {
+    results.push('❌ Cannot reach Supabase URL at all — check internet or project deleted');
+  }
+  
+  // Test 2: Try a real REST request (will fail with 400 or CORS but proves endpoint exists)
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+      method: 'GET',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (resp.status === 503 || resp.status === 502) {
+      results.push('❌ Supabase returned 502/503 — project is PAUSED. Go to supabase.com dashboard → unpause.');
+    } else if (resp.status === 0) {
+      results.push('❌ CORS blocked or no response — add your domain to Supabase CORS settings');
+    } else {
+      results.push(`✅ Supabase REST API responded (${resp.status}) — project is awake`);
+    }
+  } catch (e) {
+    const msg = e.message || '';
+    if (msg.includes('Failed to fetch')) {
+      results.push('❌ Fetch failed — likely CORS blocked or project paused. Check Supabase dashboard.');
+    } else {
+      results.push(`❌ Network error: ${msg}`);
+    }
+  }
+  
+  // Test 3: Try Supabase auth health
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error && error.message && error.message.includes('Failed to fetch')) {
+      results.push('❌ Supabase client cannot connect — same CORS/pause issue');
+    } else {
+      results.push('✅ Supabase auth client is responsive');
+    }
+  } catch (e) {
+    results.push(`❌ Supabase client error: ${e.message}`);
+  }
+  
+  console.log('=== NEXSEND CONNECTIVITY REPORT ===');
+  console.log(results.join('\n'));
+  console.log('===================================');
+  
+  // Show warning if issues detected
+  const hasErrors = results.some(r => r.startsWith('❌'));
+  if (hasErrors) {
+    warningEl.style.display = 'block';
+    warningEl.innerHTML = results.join('<br>');
+  }
+  return hasErrors;
+}
+
+// Run test on load
+setTimeout(testConnectivity, 500);
+
 // ==================== UTILS ====================
 function escapeHtml(text) {
   if (!text) return '';
@@ -517,19 +597,48 @@ function formatMessageTime(dateStr) {
   return date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
 }
 
-// Map technical errors to friendly Arabic messages
-function getFriendlyError(err) {
-  if (!err) return 'حدث خطأ غير متوقع';
+function classifyError(err) {
+  if (!err) return { type: 'unknown', msg: 'حدث خطأ غير متوقع' };
   const msg = (err.message || err.toString()).toLowerCase();
-  if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network error')) {
-    return 'فشل الاتصال بالخادم. تحقق من:\n1. اتصال الإنترنت\n2. أن مشروع Supabase غير متوقف (Paused)\n3. إعدادات CORS في Supabase';
+  const fullMsg = err.message || err.toString();
+  
+  if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network error') || msg.includes('fetch')) {
+    return { 
+      type: 'network', 
+      msg: 'فشل الاتصال بالخادم.\n\nالأسباب المحتملة:\n1. مشروع Supabase متوقف (Paused) — افتح لوحة التحكم وشغله\n2. إعدادات CORS غير مضبوطة — أضف نطاق Vercel إلى Supabase\n3. مشكلة في الإنترنت\n\n(افتح Console بالضغط على F12 للتفاصيل)' 
+    };
   }
-  if (msg.includes('invalid login credentials')) return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
-  if (msg.includes('user not found')) return 'المستخدم غير موجود';
-  if (msg.includes('email not confirmed')) return 'لم يتم تأكيد البريد الإلكتروني بعد';
-  if (msg.includes('rate limit')) return 'عدد محاولات كبير، يرجى الانتظار قليلاً';
-  if (msg.includes('timeout')) return 'انتهت مهلة الاتصال، أعد المحاولة';
-  return err.message || 'حدث خطأ غير متوقع';
+  if (msg.includes('invalid login credentials')) return { type: 'auth', msg: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
+  if (msg.includes('user not found')) return { type: 'auth', msg: 'المستخدم غير موجود' };
+  if (msg.includes('email not confirmed')) return { type: 'auth', msg: 'لم يتم تأكيد البريد الإلكتروني بعد' };
+  if (msg.includes('rate limit')) return { type: 'rate', msg: 'عدد محاولات كبير، يرجى الانتظار قليلاً' };
+  if (msg.includes('timeout')) return { type: 'network', msg: 'انتهت مهلة الاتصال، أعد المحاولة' };
+  if (msg.includes('row level security') || msg.includes('rls')) return { type: 'rls', msg: 'خطأ في صلاحيات قاعدة البيانات (RLS) — تحقق من إعدادات Supabase' };
+  return { type: 'unknown', msg: fullMsg };
+}
+
+// Retry wrapper with exponential backoff
+async function withRetry(operation, maxRetries = 3) {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const result = await operation();
+      if (result.error && result.error.message && result.error.message.includes('Failed to fetch')) {
+        lastError = result.error;
+        const delay = Math.min(1000 * Math.pow(2, i), 5000);
+        console.log(`Retry ${i + 1}/${maxRetries} after ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      return result;
+    } catch (err) {
+      lastError = err;
+      const delay = Math.min(1000 * Math.pow(2, i), 5000);
+      console.log(`Retry ${i + 1}/${maxRetries} after ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
 }
 
 // ==================== DARK MODE ====================
@@ -606,12 +715,13 @@ loginForm.addEventListener('submit', async (e) => {
   btn.textContent = 'جاري التحقق...';
 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await withRetry(() => supabase.auth.signInWithPassword({ email, password }));
     btn.disabled = false;
     btn.textContent = 'تسجيل الدخول';
 
     if (error) {
-      errorEl.textContent = getFriendlyError(error);
+      const errInfo = classifyError(error);
+      errorEl.textContent = errInfo.msg;
       errorEl.style.display = 'block';
       return;
     }
@@ -621,7 +731,8 @@ loginForm.addEventListener('submit', async (e) => {
   } catch (err) {
     btn.disabled = false;
     btn.textContent = 'تسجيل الدخول';
-    errorEl.textContent = getFriendlyError(err);
+    const errInfo = classifyError(err);
+    errorEl.textContent = errInfo.msg;
     errorEl.style.display = 'block';
   }
 });
@@ -648,16 +759,17 @@ registerForm.addEventListener('submit', async (e) => {
   btn.textContent = 'جاري الإنشاء...';
 
   try {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await withRetry(() => supabase.auth.signUp({
       email, password,
       options: { data: { username, display_name: username } }
-    });
+    }));
 
     btn.disabled = false;
     btn.textContent = 'إنشاء حساب';
 
     if (error) {
-      errorEl.textContent = getFriendlyError(error);
+      const errInfo = classifyError(error);
+      errorEl.textContent = errInfo.msg;
       errorEl.style.display = 'block';
       return;
     }
@@ -668,7 +780,8 @@ registerForm.addEventListener('submit', async (e) => {
   } catch (err) {
     btn.disabled = false;
     btn.textContent = 'إنشاء حساب';
-    errorEl.textContent = getFriendlyError(err);
+    const errInfo = classifyError(err);
+    errorEl.textContent = errInfo.msg;
     errorEl.style.display = 'block';
   }
 });
@@ -690,20 +803,10 @@ let conversationMap = new Map();
 let pollIntervals = [];
 
 function cleanupApp() {
-  // Clear all polling intervals to prevent duplicates on re-login
   pollIntervals.forEach(clearInterval);
   pollIntervals = [];
-  
-  // Remove realtime channels
-  if (chatRealtimeChannel) {
-    supabase.removeChannel(chatRealtimeChannel);
-    chatRealtimeChannel = null;
-  }
-  if (globalRealtimeChannel) {
-    supabase.removeChannel(globalRealtimeChannel);
-    globalRealtimeChannel = null;
-  }
-  
+  if (chatRealtimeChannel) { supabase.removeChannel(chatRealtimeChannel); chatRealtimeChannel = null; }
+  if (globalRealtimeChannel) { supabase.removeChannel(globalRealtimeChannel); globalRealtimeChannel = null; }
   currentPartnerId = null;
   currentUser = null;
   conversationMap.clear();
@@ -884,12 +987,12 @@ async function openChat(partnerId, profile) {
       const { error } = await supabase.from('messages').insert({ sender_id: currentUser.id, receiver_id: partnerId, content });
       if (error) { 
         console.error('Send error:', error); 
-        alert('فشل إرسال الرسالة: ' + getFriendlyError(error)); 
+        alert('فشل إرسال الرسالة: ' + classifyError(error).msg); 
       }
       updateConversationPreview(partnerId, content, new Date());
     } catch (err) {
       console.error('Send exception:', err);
-      alert('فشل إرسال الرسالة: ' + getFriendlyError(err));
+      alert('فشل إرسال الرسالة: ' + classifyError(err).msg);
     }
   };
   sendBtn.addEventListener('click', sendMessage);
@@ -997,7 +1100,7 @@ async function searchUsers() {
     chatSearchBtn.disabled = false;
     chatSearchBtn.textContent = 'بحث';
 
-    if (error) { chatSearchError.textContent = getFriendlyError(error); return; }
+    if (error) { chatSearchError.textContent = classifyError(error).msg; return; }
     if (!data || data.length === 0) { chatSearchError.textContent = 'لم يتم العثور على مستخدمين'; return; }
 
     for (const profile of data) {
@@ -1026,7 +1129,7 @@ async function searchUsers() {
   } catch (err) {
     chatSearchBtn.disabled = false;
     chatSearchBtn.textContent = 'بحث';
-    chatSearchError.textContent = getFriendlyError(err);
+    chatSearchError.textContent = classifyError(err).msg;
   }
 }
 
@@ -1075,7 +1178,7 @@ document.getElementById('new-group-btn').addEventListener('click', async () => {
     }
   } catch (err) {
     groupMembersLoading.style.display = 'none';
-    groupError.textContent = getFriendlyError(err);
+    groupError.textContent = classifyError(err).msg;
   }
 });
 
@@ -1105,11 +1208,9 @@ document.getElementById('sidebar-search').addEventListener('input', (e) => {
 
 // ==================== POLLING ====================
 function startPolling() {
-  // Prevent duplicate intervals
   pollIntervals.forEach(clearInterval);
   pollIntervals = [];
 
-  // Poll chat messages every 5 seconds
   const chatPoll = setInterval(async () => {
     if (!currentPartnerId || !currentUser) return;
     try {
@@ -1127,16 +1228,13 @@ function startPolling() {
           added++;
         }
       }
-      if (added > 0) {
-        container.scrollTop = container.scrollHeight;
-      }
+      if (added > 0) container.scrollTop = container.scrollHeight;
     } catch (err) {
       console.error('Chat poll error:', err);
     }
   }, 5000);
   pollIntervals.push(chatPoll);
 
-  // Poll conversation list every 10 seconds
   const convPoll = setInterval(async () => {
     if (!currentUser) return;
     try {

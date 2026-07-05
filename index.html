@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NexSend</title>
+<title>NexSend Pro</title>
 <style>
 :root {
   --bg: #e5ddd5;
@@ -25,6 +25,8 @@
   --icon-color: #54656f;
   --error: #ef4444;
   --link: #008069;
+  --menu-bg: #ffffff;
+  --menu-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 [data-theme="dark"] {
   --bg: #0a1014;
@@ -46,6 +48,8 @@
   --icon-color: #aebac1;
   --error: #ef4444;
   --link: #00a884;
+  --menu-bg: #2a3942;
+  --menu-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
@@ -139,7 +143,7 @@ body {
 }
 .sidebar-header .logo svg { width: 28px; height: 28px; color: var(--icon-color); }
 .sidebar-actions {
-  display: flex; gap: 8px; align-items: center;
+  display: flex; gap: 6px; align-items: center;
 }
 .sidebar-actions button {
   background: none; border: none; color: var(--icon-color);
@@ -203,6 +207,9 @@ body {
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
 .avatar-sm { width: 40px; height: 40px; font-size: 14px; }
+.group-avatar {
+  background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+}
 
 /* Chat Area */
 .chat-area {
@@ -245,7 +252,7 @@ body {
   z-index: 1;
 }
 .message-row {
-  display: flex; margin-bottom: 2px;
+  display: flex; margin-bottom: 2px; position: relative;
 }
 .message-row.sent { justify-content: flex-start; }
 .message-row.received { justify-content: flex-end; }
@@ -254,6 +261,7 @@ body {
   border-radius: 8px; font-size: 14px; line-height: 1.4;
   word-break: break-word; position: relative;
   box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+  cursor: pointer; user-select: none;
 }
 .message-bubble.sent {
   background: var(--sent-bubble); color: var(--text);
@@ -263,12 +271,17 @@ body {
   background: var(--received-bubble); color: var(--text);
   border-top-left-radius: 0;
 }
+.message-bubble.deleted {
+  opacity: 0.6; font-style: italic;
+}
 .message-meta {
   display: flex; align-items: center; gap: 4px;
   justify-content: flex-end; margin-top: 2px;
 }
 .message-time { font-size: 10px; color: var(--text-muted); }
 .message-check svg { width: 14px; height: 14px; color: var(--text-muted); }
+.message-check.read svg { color: #53bdeb; }
+.message-edited { font-size: 10px; color: var(--text-muted); margin-left: 4px; }
 
 .chat-input-area {
   display: flex; align-items: center; gap: 8px;
@@ -308,6 +321,26 @@ body {
 .empty-chat h3 { font-size: 24px; font-weight: 300; }
 .empty-chat p { font-size: 14px; }
 
+/* Loading more */
+.load-more {
+  text-align: center; padding: 8px; color: var(--text-muted); font-size: 12px;
+}
+
+/* Context Menu */
+.context-menu {
+  position: absolute; background: var(--menu-bg);
+  border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: var(--menu-shadow); z-index: 100;
+  min-width: 140px; display: none; overflow: hidden;
+}
+.context-menu.active { display: block; }
+.context-menu-item {
+  padding: 10px 16px; font-size: 14px; cursor: pointer;
+  color: var(--text); display: flex; align-items: center; gap: 8px;
+}
+.context-menu-item:hover { background: var(--active-chat); }
+.context-menu-item.danger { color: var(--error); }
+
 /* Modal */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200;
@@ -320,12 +353,12 @@ body {
   max-height: 80vh; overflow-y: auto;
 }
 .modal h2 { margin-bottom: 16px; font-size: 18px; }
-.modal input {
+.modal input, .modal select {
   width: 100%; padding: 10px 14px; border: 1px solid var(--border);
   border-radius: 8px; font-family: inherit; font-size: 14px; margin-bottom: 12px;
   background: var(--input-bg); color: var(--text);
 }
-.modal input:focus { outline: none; border-color: var(--primary); }
+.modal input:focus, .modal select:focus { outline: none; border-color: var(--primary); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 .modal-error { color: var(--error); font-size: 13px; margin-bottom: 10px; }
 .search-results { margin-top: 8px; }
@@ -364,6 +397,16 @@ body {
   display: none; background: none; border: none; color: var(--icon-color);
   cursor: pointer; padding: 8px;
 }
+
+.typing-indicator {
+  font-size: 12px; color: var(--primary);
+  padding: 4px 12px;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 </style>
 </head>
 <body>
@@ -374,7 +417,7 @@ body {
     <div class="auth-card">
       <div class="auth-logo">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.82.49 3.53 1.34 5.01L2 22l5.17-1.34A9.96 9.96 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.66 0-3.22-.51-4.52-1.38l-.32-.21-3.08.79.82-3.01-.21-.33A8.02 8.02 0 0 1 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8zm4.24-5.76c-.23-.12-1.35-.67-1.56-.74-.21-.07-.36-.12-.51.12-.15.23-.59.74-.72.89-.13.15-.26.17-.49.06-.23-.12-.97-.36-1.85-1.14-.68-.61-1.14-1.36-1.27-1.59-.13-.23-.01-.36.1-.48.1-.1.23-.26.35-.39.12-.13.15-.23.23-.38.08-.15.04-.28-.02-.39-.06-.12-.51-1.23-.7-1.68-.18-.44-.37-.38-.51-.39l-.43-.01c-.15 0-.39.06-.59.28-.21.23-.79.77-.79 1.88s.81 2.18.92 2.33c.12.15 1.59 2.43 3.85 3.41.54.23.96.37 1.29.47.54.17 1.03.15 1.42.09.43-.06 1.35-.55 1.54-1.08.19-.53.19-.98.13-1.08-.06-.1-.23-.15-.46-.27z"/></svg>
-        <h1>NexSend</h1>
+        <h1>NexSend Pro</h1>
       </div>
       <div class="auth-tabs">
         <button class="auth-tab active" data-tab="login">تسجيل الدخول</button>
@@ -398,6 +441,10 @@ body {
         <div class="form-group">
           <label>اسم المستخدم</label>
           <input type="text" id="register-username" placeholder="username" required>
+        </div>
+        <div class="form-group">
+          <label>رقم الهاتف</label>
+          <input type="tel" id="register-phone" placeholder="+963912345678" required>
         </div>
         <div class="form-group">
           <label>البريد الإلكتروني</label>
@@ -424,9 +471,12 @@ body {
       <div class="sidebar-header">
         <div class="logo">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.82.49 3.53 1.34 5.01L2 22l5.17-1.34A9.96 9.96 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.66 0-3.22-.51-4.52-1.38l-.32-.21-3.08.79.82-3.01-.21-.33A8.02 8.02 0 0 1 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8zm4.24-5.76c-.23-.12-1.35-.67-1.56-.74-.21-.07-.36-.12-.51.12-.15.23-.59.74-.72.89-.13.15-.26.17-.49.06-.23-.12-.97-.36-1.85-1.14-.68-.61-1.14-1.36-1.27-1.59-.13-.23-.01-.36.1-.48.1-.1.23-.26.35-.39.12-.13.15-.23.23-.38.08-.15.04-.28-.02-.39-.06-.12-.51-1.23-.7-1.68-.18-.44-.37-.38-.51-.39l-.43-.01c-.15 0-.39.06-.59.28-.21.23-.79.77-.79 1.88s.81 2.18.92 2.33c.12.15 1.59 2.43 3.85 3.41.54.23.96.37 1.29.47.54.17 1.03.15 1.42.09.43-.06 1.35-.55 1.54-1.08.19-.53.19-.98.13-1.08-.06-.1-.23-.15-.46-.27z"/></svg>
-          NexSend
+          NexSend Pro
         </div>
         <div class="sidebar-actions">
+          <button id="add-contact-btn" title="إضافة شخص">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          </button>
           <button id="new-chat-btn" title="دردشة جديدة">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
           </button>
@@ -453,9 +503,29 @@ body {
     <div class="chat-area" id="chat-area">
       <div class="empty-chat" id="empty-chat">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.82.49 3.53 1.34 5.01L2 22l5.17-1.34A9.96 9.96 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.66 0-3.22-.51-4.52-1.38l-.32-.21-3.08.79.82-3.01-.21-.33A8.02 8.02 0 0 1 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8zm4.24-5.76c-.23-.12-1.35-.67-1.56-.74-.21-.07-.36-.12-.51.12-.15.23-.59.74-.72.89-.13.15-.26.17-.49.06-.23-.12-.97-.36-1.85-1.14-.68-.61-1.14-1.36-1.27-1.59-.13-.23-.01-.36.1-.48.1-.1.23-.26.35-.39.12-.13.15-.23.23-.38.08-.15.04-.28-.02-.39-.06-.12-.51-1.23-.7-1.68-.18-.44-.37-.38-.51-.39l-.43-.01c-.15 0-.39.06-.59.28-.21.23-.79.77-.79 1.88s.81 2.18.92 2.33c.12.15 1.59 2.43 3.85 3.41.54.23.96.37 1.29.47.54.17 1.03.15 1.42.09.43-.06 1.35-.55 1.54-1.08.19-.53.19-.98.13-1.08-.06-.1-.23-.15-.46-.27z"/></svg>
-        <h3>NexSend</h3>
+        <h3>NexSend Pro</h3>
         <p>اختر محادثة من القائمة للبدء</p>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="msg-context-menu">
+  <div class="context-menu-item" id="ctx-edit">✏️ تعديل</div>
+  <div class="context-menu-item danger" id="ctx-delete">🗑️ حذف</div>
+</div>
+
+<!-- Add Contact Modal -->
+<div class="modal-overlay" id="add-contact-modal">
+  <div class="modal">
+    <h2>إضافة شخص</h2>
+    <input type="text" id="add-contact-input" placeholder="ابحث بالاسم أو رقم الهاتف...">
+    <button id="add-contact-search-btn" style="width:100%;margin-bottom:12px;padding:10px;border-radius:8px;border:none;background:var(--primary);color:white;font-weight:600;cursor:pointer;">بحث</button>
+    <div class="modal-error" id="add-contact-error"></div>
+    <div class="search-results" id="add-contact-results"></div>
+    <div class="modal-actions">
+      <button id="add-contact-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer;">إلغاء</button>
     </div>
   </div>
 </div>
@@ -464,7 +534,7 @@ body {
 <div class="modal-overlay" id="new-chat-modal">
   <div class="modal">
     <h2>دردشة جديدة</h2>
-    <input type="text" id="chat-search-input" placeholder="ابحث باسم المستخدم...">
+    <input type="text" id="chat-search-input" placeholder="ابحث بالاسم أو رقم الهاتف...">
     <button id="chat-search-btn" style="width:100%;margin-bottom:12px;padding:10px;border-radius:8px;border:none;background:var(--primary);color:white;font-weight:600;cursor:pointer;">بحث</button>
     <div class="modal-error" id="chat-search-error"></div>
     <div class="search-results" id="chat-search-results"></div>
@@ -480,7 +550,7 @@ body {
     <h2>مجموعة جديدة</h2>
     <input type="text" id="group-name-input" placeholder="اسم المجموعة...">
     <div class="modal-error" id="group-error"></div>
-    <div id="group-members-loading" style="padding:12px;text-align:center;color:var(--text-muted);">جاري تحميل المتابعين...</div>
+    <div id="group-members-loading" style="padding:12px;text-align:center;color:var(--text-muted);">جاري تحميل جهات الاتصال...</div>
     <div class="member-select" id="group-member-select"></div>
     <div class="modal-actions">
       <button id="group-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer;">إلغاء</button>
@@ -489,9 +559,21 @@ body {
   </div>
 </div>
 
+<!-- Edit Message Modal -->
+<div class="modal-overlay" id="edit-msg-modal">
+  <div class="modal">
+    <h2>تعديل الرسالة</h2>
+    <input type="text" id="edit-msg-input" placeholder="نص الرسالة الجديد...">
+    <div class="modal-error" id="edit-msg-error"></div>
+    <div class="modal-actions">
+      <button id="edit-msg-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer;">إلغاء</button>
+      <button id="edit-msg-save" style="padding:8px 16px;border-radius:8px;border:none;background:var(--primary);color:white;font-weight:600;cursor:pointer;">حفظ</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-// ✅ EXACT match from Supabase dashboard
 const SUPABASE_URL = 'https://woslwalstvtsynxoqeab.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indvc2x3YWxzdHZ0c3lueG9xZWFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTQ2MTYsImV4cCI6MjA5ODczMDYxNn0.rfCqKjKjvq6fcUlYyVoYDGK0Wyfr7fjc6Z3BJ67UUOk';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -517,17 +599,18 @@ function formatMessageTime(dateStr) {
   const date = new Date(dateStr);
   return date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
 }
-
 function classifyError(err) {
   if (!err) return { type: 'unknown', msg: 'حدث خطأ غير متوقع' };
   const msg = (err.message || err.toString()).toLowerCase();
   const fullMsg = err.message || err.toString();
-  
   if (msg.includes('invalid login credentials')) return { type: 'auth', msg: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
   if (msg.includes('user not found')) return { type: 'auth', msg: 'المستخدم غير موجود' };
   if (msg.includes('email not confirmed')) return { type: 'auth', msg: 'لم يتم تأكيد البريد الإلكتروني بعد' };
   if (msg.includes('rate limit')) return { type: 'rate', msg: 'عدد محاولات كبير، يرجى الانتظار قليلاً' };
   if (msg.includes('row level security') || msg.includes('rls')) return { type: 'rls', msg: 'خطأ في صلاحيات قاعدة البيانات (RLS) — تحقق من إعدادات Supabase' };
+  if (msg.includes('unique constraint') && msg.includes('username')) return { type: 'dup', msg: 'اسم المستخدم مستخدم بالفعل' };
+  if (msg.includes('unique constraint') && msg.includes('phone')) return { type: 'dup', msg: 'رقم الهاتف مستخدم بالفعل' };
+  if (msg.includes('unique constraint') && msg.includes('email')) return { type: 'dup', msg: 'البريد الإلكتروني مستخدم بالفعل' };
   return { type: 'unknown', msg: fullMsg };
 }
 
@@ -585,7 +668,6 @@ function showApp() {
   appScreen.classList.add('active');
   initApp();
 }
-
 function showAuth() {
   authScreen.style.display = 'flex';
   appScreen.classList.remove('active');
@@ -598,23 +680,19 @@ loginForm.addEventListener('submit', async (e) => {
   const password = document.getElementById('login-password').value;
   const errorEl = document.getElementById('login-error');
   const btn = document.getElementById('login-btn');
-
   errorEl.style.display = 'none';
   btn.disabled = true;
   btn.textContent = 'جاري التحقق...';
-
   try {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     btn.disabled = false;
     btn.textContent = 'تسجيل الدخول';
-
     if (error) {
       const errInfo = classifyError(error);
       errorEl.textContent = errInfo.msg;
       errorEl.style.display = 'block';
       return;
     }
-
     currentUser = data.user;
     showApp();
   } catch (err) {
@@ -626,10 +704,11 @@ loginForm.addEventListener('submit', async (e) => {
   }
 });
 
-// Register
+// Register (NO EMAIL CONFIRMATION - auto login)
 registerForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const username = document.getElementById('register-username').value.trim().toLowerCase();
+  const phone = document.getElementById('register-phone').value.trim();
   const email = document.getElementById('register-email').value.trim();
   const password = document.getElementById('register-password').value;
   const confirm = document.getElementById('register-password-confirm').value;
@@ -643,29 +722,46 @@ registerForm.addEventListener('submit', async (e) => {
   if (password !== confirm) { errorEl.textContent = 'كلمتا المرور غير متطابقتين'; errorEl.style.display = 'block'; return; }
   if (password.length < 8) { errorEl.textContent = 'يجب أن تكون كلمة المرور 8 أحرف على الأقل'; errorEl.style.display = 'block'; return; }
   if (!/^[a-zA-Z0-9_]+$/.test(username)) { errorEl.textContent = 'اسم المستخدم يجب أن يحتوي على أحرف إنجليزية وأرقام وشرطة سفلية فقط'; errorEl.style.display = 'block'; return; }
+  if (!/^\+?[0-9\s\-]{7,20}$/.test(phone)) { errorEl.textContent = 'رقم الهاتف غير صالح'; errorEl.style.display = 'block'; return; }
 
   btn.disabled = true;
   btn.textContent = 'جاري الإنشاء...';
 
   try {
-    const { data, error } = await supabase.auth.signUp({
+    // Sign up with auto-confirm metadata
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email, password,
-      options: { data: { username, display_name: username } }
+      options: { 
+        data: { username, display_name: username, phone },
+        emailRedirectTo: window.location.href
+      }
     });
 
-    btn.disabled = false;
-    btn.textContent = 'إنشاء حساب';
-
-    if (error) {
-      const errInfo = classifyError(error);
+    if (signUpError) {
+      btn.disabled = false;
+      btn.textContent = 'إنشاء حساب';
+      const errInfo = classifyError(signUpError);
       errorEl.textContent = errInfo.msg;
       errorEl.style.display = 'block';
       return;
     }
 
-    successEl.textContent = 'تم إنشاء الحساب! تحقق من بريدك الإلكتروني لتأكيد الحساب.';
-    successEl.style.display = 'block';
-    setTimeout(() => authTabs[0].click(), 2000);
+    // Auto login after signup (works if Confirm email is OFF in Supabase Auth settings)
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+    btn.disabled = false;
+    btn.textContent = 'إنشاء حساب';
+
+    if (signInError) {
+      // If email confirmation is ON, show message
+      successEl.textContent = 'تم إنشاء الحساب! يمكنك تسجيل الدخول الآن (إذا كان التحقق من الإيميل معطلاً في الإعدادات ستدخل تلقائياً).';
+      successEl.style.display = 'block';
+      setTimeout(() => authTabs[0].click(), 3000);
+      return;
+    }
+
+    currentUser = signInData.user;
+    showApp();
   } catch (err) {
     btn.disabled = false;
     btn.textContent = 'إنشاء حساب';
@@ -682,14 +778,23 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
   showAuth();
 });
 
-// ==================== APP ====================
+// ==================== APP STATE ====================
 const conversationsList = document.getElementById('conversations-list');
 const chatArea = document.getElementById('chat-area');
 let currentPartnerId = null;
+let currentGroupId = null;
+let currentChatType = null; // 'direct' or 'group'
 let chatRealtimeChannel = null;
 let globalRealtimeChannel = null;
 let conversationMap = new Map();
 let pollIntervals = [];
+let messageOffset = 0;
+const MESSAGE_LIMIT = 30;
+let isLoadingMore = false;
+let allMessagesLoaded = false;
+let typingTimeout = null;
+let currentEditingMsgId = null;
+let contextMenuTarget = null;
 
 function cleanupApp() {
   pollIntervals.forEach(clearInterval);
@@ -697,13 +802,16 @@ function cleanupApp() {
   if (chatRealtimeChannel) { supabase.removeChannel(chatRealtimeChannel); chatRealtimeChannel = null; }
   if (globalRealtimeChannel) { supabase.removeChannel(globalRealtimeChannel); globalRealtimeChannel = null; }
   currentPartnerId = null;
+  currentGroupId = null;
+  currentChatType = null;
   currentUser = null;
   conversationMap.clear();
+  messageOffset = 0;
   conversationsList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">جاري التحميل...</div>';
   chatArea.innerHTML = `
     <div class="empty-chat" id="empty-chat">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.82.49 3.53 1.34 5.01L2 22l5.17-1.34A9.96 9.96 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.66 0-3.22-.51-4.52-1.38l-.32-.21-3.08.79.82-3.01-.21-.33A8.02 8.02 0 0 1 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8zm4.24-5.76c-.23-.12-1.35-.67-1.56-.74-.21-.07-.36-.12-.51.12-.15.23-.59.74-.72.89-.13.15-.26.17-.49.06-.23-.12-.97-.36-1.85-1.14-.68-.61-1.14-1.36-1.27-1.59-.13-.23-.01-.36.1-.48.1-.1.23-.26.35-.39.12-.13.15-.23.23-.38.08-.15.04-.28-.02-.39-.06-.12-.51-1.23-.7-1.68-.18-.44-.37-.38-.51-.39l-.43-.01c-.15 0-.39.06-.59.28-.21.23-.79.77-.79 1.88s.81 2.18.92 2.33c.12.15 1.59 2.43 3.85 3.41.54.23.96.37 1.29.47.54.17 1.03.15 1.42.09.43-.06 1.35-.55 1.54-1.08.19-.53.19-.98.13-1.08-.06-.1-.23-.15-.46-.27z"/></svg>
-      <h3>NexSend</h3>
+      <h3>NexSend Pro</h3>
       <p>اختر محادثة من القائمة للبدء</p>
     </div>
   `;
@@ -720,67 +828,113 @@ async function initApp() {
   }
 }
 
+// ==================== CONVERSATIONS ====================
 async function loadConversations() {
   if (!currentUser) return;
   try {
-    const { data } = await supabase
+    // Load direct messages
+    const { data: msgs } = await supabase
       .from('messages')
-      .select('sender_id, receiver_id, content, created_at')
+      .select('id, sender_id, receiver_id, content, created_at, read_at')
       .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
+      .eq('deleted', false)
       .order('created_at', { ascending: false });
 
     const partnerMap = new Map();
-    for (const msg of data || []) {
+    for (const msg of msgs || []) {
       const partnerId = msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
       if (!partnerMap.has(partnerId)) partnerMap.set(partnerId, msg);
     }
-    const partnerIds = Array.from(partnerMap.keys());
 
-    if (partnerIds.length === 0) {
+    // Load groups
+    const { data: groupMemberships } = await supabase
+      .from('group_members')
+      .select('group_id')
+      .eq('user_id', currentUser.id);
+
+    const groupIds = (groupMemberships || []).map(g => g.group_id);
+    let groupMap = new Map();
+    if (groupIds.length > 0) {
+      const { data: groups } = await supabase
+        .from('groups')
+        .select('id, name, creator_id, created_at')
+        .in('id', groupIds);
+
+      const { data: groupMsgs } = await supabase
+        .from('group_messages')
+        .select('id, group_id, content, created_at')
+        .in('group_id', groupIds)
+        .eq('deleted', false)
+        .order('created_at', { ascending: false });
+
+      for (const g of groups || []) {
+        const lastMsg = (groupMsgs || []).find(m => m.group_id === g.id);
+        groupMap.set(g.id, { type: 'group', data: g, lastMsg: lastMsg || { content: 'مجموعة جديدة', created_at: g.created_at } });
+      }
+    }
+
+    const partnerIds = Array.from(partnerMap.keys());
+    conversationsList.innerHTML = '';
+    conversationMap.clear();
+
+    if (partnerIds.length === 0 && groupMap.size === 0) {
       conversationsList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">لا توجد محادثات بعد</div>';
       return;
     }
 
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, username, display_name, avatar_url')
-      .in('id', partnerIds);
+    // Render direct conversations
+    if (partnerIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url, phone')
+        .in('id', partnerIds);
 
-    conversationsList.innerHTML = '';
-    conversationMap.clear();
-    for (const id of partnerIds) {
-      const profile = profiles?.find(p => p.id === id);
-      const lastMsg = partnerMap.get(id);
-      renderConversation(id, profile, lastMsg);
+      for (const id of partnerIds) {
+        const profile = profiles?.find(p => p.id === id);
+        const lastMsg = partnerMap.get(id);
+        renderConversation(id, profile, lastMsg, 'direct');
+      }
     }
+
+    // Render groups
+    for (const [groupId, info] of groupMap) {
+      renderConversation(groupId, info.data, info.lastMsg, 'group');
+    }
+
   } catch (err) {
     console.error('Load conversations error:', err);
     conversationsList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--error);">فشل تحميل المحادثات</div>';
   }
 }
 
-function renderConversation(partnerId, profile, lastMsg, prepend = false) {
-  const avatarLetter = (profile?.display_name || profile?.username || 'م')[0].toUpperCase();
-  const avatarHtml = profile?.avatar_url ? `<img src="${escapeHtml(profile.avatar_url)}" alt="">` : escapeHtml(avatarLetter);
+function renderConversation(id, profileOrGroup, lastMsg, type, prepend = false) {
+  const isGroup = type === 'group';
+  const name = isGroup ? profileOrGroup.name : (profileOrGroup?.display_name || profileOrGroup?.username || 'مستخدم');
+  const avatarLetter = name[0].toUpperCase();
+  const avatarHtml = !isGroup && profileOrGroup?.avatar_url ? `<img src="${escapeHtml(profileOrGroup.avatar_url)}" alt="">` : escapeHtml(avatarLetter);
+  const avatarClass = isGroup ? 'avatar avatar-sm group-avatar' : 'avatar avatar-sm';
+
   const div = document.createElement('div');
   div.className = 'conversation-item';
-  div.dataset.userId = partnerId;
+  div.dataset.id = id;
+  div.dataset.type = type;
   div.innerHTML = `
-    <div class="avatar avatar-sm">${avatarHtml}</div>
+    <div class="${avatarClass}">${avatarHtml}</div>
     <div class="info">
       <div class="name-row">
-        <div class="name">${escapeHtml(profile?.display_name || profile?.username || 'مستخدم')}</div>
-        <div class="time" id="time-${partnerId}">${formatShortTime(lastMsg?.created_at || new Date())}</div>
+        <div class="name">${escapeHtml(name)}</div>
+        <div class="time" id="time-${type}-${id}">${formatShortTime(lastMsg?.created_at || new Date())}</div>
       </div>
       <div class="preview-row">
-        <div class="preview" id="preview-${partnerId}">${escapeHtml(lastMsg?.content || '')}</div>
-        <div class="unread-dot" id="unread-${partnerId}" style="display:none;"></div>
+        <div class="preview" id="preview-${type}-${id}">${escapeHtml(lastMsg?.content || '')}</div>
+        <div class="unread-dot" id="unread-${type}-${id}" style="display:none;"></div>
       </div>
     </div>
   `;
   div.addEventListener('click', () => {
-    document.getElementById(`unread-${partnerId}`)?.style.setProperty('display', 'none');
-    openChat(partnerId, profile);
+    document.getElementById(`unread-${type}-${id}`)?.style.setProperty('display', 'none');
+    if (isGroup) openGroupChat(id, profileOrGroup);
+    else openChat(id, profileOrGroup);
   });
 
   if (prepend && conversationsList.firstChild) {
@@ -788,28 +942,35 @@ function renderConversation(partnerId, profile, lastMsg, prepend = false) {
   } else {
     conversationsList.appendChild(div);
   }
-  conversationMap.set(partnerId, { element: div, profile });
+  conversationMap.set(`${type}-${id}`, { element: div, profile: profileOrGroup, type });
 }
 
-function updateConversationPreview(partnerId, content, time) {
-  const preview = document.getElementById(`preview-${partnerId}`);
-  const timeEl = document.getElementById(`time-${partnerId}`);
+function updateConversationPreview(id, type, content, time) {
+  const preview = document.getElementById(`preview-${type}-${id}`);
+  const timeEl = document.getElementById(`time-${type}-${id}`);
   if (preview) preview.textContent = content;
   if (timeEl) timeEl.textContent = formatShortTime(time);
-  const conv = conversationMap.get(partnerId);
+  const key = `${type}-${id}`;
+  const conv = conversationMap.get(key);
   if (conv && conv.element && conversationsList.firstChild !== conv.element) {
     conversationsList.insertBefore(conv.element, conversationsList.firstChild);
   }
-  if (partnerId !== currentPartnerId) {
-    const unread = document.getElementById(`unread-${partnerId}`);
+  if ((type === 'direct' && id !== currentPartnerId) || (type === 'group' && id !== currentGroupId)) {
+    const unread = document.getElementById(`unread-${type}-${id}`);
     if (unread) unread.style.display = 'block';
   }
 }
 
+// ==================== DIRECT CHAT ====================
 async function openChat(partnerId, profile) {
   currentPartnerId = partnerId;
+  currentGroupId = null;
+  currentChatType = 'direct';
+  messageOffset = 0;
+  allMessagesLoaded = false;
+
   document.querySelectorAll('.conversation-item').forEach(el => el.classList.remove('active'));
-  document.querySelector(`.conversation-item[data-user-id="${partnerId}"]`)?.classList.add('active');
+  document.querySelector(`.conversation-item[data-id="${partnerId}"][data-type="direct"]`)?.classList.add('active');
 
   const avatarLetter = (profile?.display_name || profile?.username || 'م')[0].toUpperCase();
   const avatarHtml = profile?.avatar_url ? `<img src="${escapeHtml(profile.avatar_url)}" alt="">` : escapeHtml(avatarLetter);
@@ -825,14 +986,12 @@ async function openChat(partnerId, profile) {
         <div class="chat-status" id="chat-status-text">متصل</div>
       </div>
       <div class="chat-header-actions">
-        <button title="بحث"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
-        <button title="قائمة"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+        <button title="قائمة" id="chat-menu-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
       </div>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-area">
-      <button title="إيموجي"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
-      <button title="مرفق"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+      <button title="إيموجي" id="emoji-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
       <input type="text" id="message-input" placeholder="اكتب رسالة..." autocomplete="off">
       <button class="send-btn" id="send-btn">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -843,154 +1002,482 @@ async function openChat(partnerId, profile) {
   document.getElementById('back-btn')?.addEventListener('click', () => {
     chatArea.classList.remove('active');
     currentPartnerId = null;
+    currentChatType = null;
   });
   if (window.innerWidth <= 768) chatArea.classList.add('active');
 
   const messagesContainer = document.getElementById('chat-messages');
-  try {
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('*')
-      .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${currentUser.id})`)
-      .order('created_at', { ascending: true });
 
-    for (const msg of messages || []) renderMessage(msg, messagesContainer);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  } catch (err) {
-    console.error('Load messages error:', err);
-    messagesContainer.innerHTML = '<div style="padding:20px;text-align:center;color:var(--error);">فشل تحميل الرسائل</div>';
-  }
+  // Load initial messages
+  await loadMoreMessages(messagesContainer, partnerId, 'direct');
+
+  // Mark as read
+  await markMessagesAsRead(partnerId);
+
+  // Scroll handler for pagination
+  messagesContainer.addEventListener('scroll', async () => {
+    if (messagesContainer.scrollTop < 50 && !isLoadingMore && !allMessagesLoaded) {
+      await loadMoreMessages(messagesContainer, partnerId, 'direct', true);
+    }
+  });
 
   const sendBtn = document.getElementById('send-btn');
   const input = document.getElementById('message-input');
+
   const sendMessage = async () => {
     const content = input.value.trim();
     if (!content) return;
     input.value = '';
     input.focus();
-    const tempMsg = { sender_id: currentUser.id, content, created_at: new Date().toISOString(), tempId: 'temp-' + Date.now() };
+
+    const tempId = 'temp-' + Date.now();
+    const tempMsg = { 
+      id: null, sender_id: currentUser.id, content, 
+      created_at: new Date().toISOString(), tempId,
+      read_at: null, edited_at: null, deleted: false
+    };
     renderMessage(tempMsg, messagesContainer);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
     try {
-      const { error } = await supabase.from('messages').insert({ sender_id: currentUser.id, receiver_id: partnerId, content });
+      const { data, error } = await supabase.from('messages').insert({ 
+        sender_id: currentUser.id, receiver_id: partnerId, content 
+      }).select().single();
+
       if (error) { 
-        console.error('Send error:', error); 
         alert('فشل إرسال الرسالة: ' + classifyError(error).msg); 
+        return;
       }
-      updateConversationPreview(partnerId, content, new Date());
+
+      // Replace temp with real
+      const tempEl = document.querySelector(`[data-temp-id="${tempId}"]`);
+      if (tempEl) {
+        tempEl.dataset.msgId = data.id;
+        delete tempEl.dataset.tempId;
+      }
+      updateConversationPreview(partnerId, 'direct', content, new Date());
     } catch (err) {
-      console.error('Send exception:', err);
       alert('فشل إرسال الرسالة: ' + classifyError(err).msg);
     }
   };
+
   sendBtn.addEventListener('click', sendMessage);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
 
+  // Typing indicator
+  input.addEventListener('input', async () => {
+    if (typingTimeout) clearTimeout(typingTimeout);
+    await supabase.from('typing_indicators').upsert({ 
+      user_id: currentUser.id, target_id: partnerId, updated_at: new Date().toISOString() 
+    }, { onConflict: 'user_id,target_id,group_id' });
+    typingTimeout = setTimeout(() => {
+      supabase.from('typing_indicators').delete().eq('user_id', currentUser.id).eq('target_id', partnerId);
+    }, 3000);
+  });
+
+  // Setup realtime
   if (chatRealtimeChannel) supabase.removeChannel(chatRealtimeChannel);
   chatRealtimeChannel = supabase
     .channel(`chat-${currentUser.id}-${partnerId}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
       const msg = payload.new;
-      const isRelevant = (msg.sender_id === currentUser.id && msg.receiver_id === partnerId) || (msg.sender_id === partnerId && msg.receiver_id === currentUser.id);
+      const isRelevant = (msg.sender_id === currentUser.id && msg.receiver_id === partnerId) || 
+                         (msg.sender_id === partnerId && msg.receiver_id === currentUser.id);
       if (!isRelevant) return;
       if (document.querySelector(`[data-msg-id="${msg.id}"]`)) return;
       renderMessage(msg, messagesContainer);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      if (msg.sender_id === partnerId) updateConversationPreview(partnerId, msg.content, msg.created_at);
+      if (msg.sender_id === partnerId) {
+        updateConversationPreview(partnerId, 'direct', msg.content, msg.created_at);
+        markMessagesAsRead(partnerId);
+      }
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (payload) => {
+      const msg = payload.new;
+      const el = document.querySelector(`[data-msg-id="${msg.id}"]`);
+      if (el) {
+        const contentDiv = el.querySelector('.msg-content');
+        if (contentDiv) {
+          contentDiv.textContent = msg.deleted ? 'تم حذف هذه الرسالة' : msg.content;
+          if (msg.deleted) el.classList.add('deleted');
+        }
+        const editedSpan = el.querySelector('.message-edited');
+        if (editedSpan && msg.edited_at) editedSpan.style.display = 'inline';
+      }
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'typing_indicators' }, (payload) => {
+      const t = payload.new;
+      if (t.target_id === currentUser.id && t.user_id === partnerId && !t.group_id) {
+        document.getElementById('chat-status-text').textContent = 'يكتب الآن...';
+        setTimeout(() => { document.getElementById('chat-status-text').textContent = 'متصل'; }, 3000);
+      }
     })
     .subscribe();
 }
 
-function renderMessage(msg, container) {
+async function loadMoreMessages(container, id, type, prepend = false) {
+  if (isLoadingMore) return;
+  isLoadingMore = true;
+
+  const loadMoreDiv = document.createElement('div');
+  loadMoreDiv.className = 'load-more';
+  loadMoreDiv.textContent = 'جاري التحميل...';
+  if (prepend) container.insertBefore(loadMoreDiv, container.firstChild);
+  else container.appendChild(loadMoreDiv);
+
+  try {
+    let data;
+    if (type === 'direct') {
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${currentUser.id})`)
+        .eq('deleted', false)
+        .order('created_at', { ascending: false })
+        .range(messageOffset, messageOffset + MESSAGE_LIMIT - 1);
+      data = msgs;
+    } else {
+      const { data: msgs } = await supabase
+        .from('group_messages')
+        .select('*')
+        .eq('group_id', id)
+        .eq('deleted', false)
+        .order('created_at', { ascending: false })
+        .range(messageOffset, messageOffset + MESSAGE_LIMIT - 1);
+      data = msgs;
+    }
+
+    if (!data || data.length < MESSAGE_LIMIT) allMessagesLoaded = true;
+
+    const scrollHeight = container.scrollHeight;
+    for (const msg of (data || []).reverse()) {
+      if (!document.querySelector(`[data-msg-id="${msg.id}"]`)) {
+        renderMessage(msg, container, prepend);
+      }
+    }
+
+    if (prepend && data && data.length > 0) {
+      container.scrollTop = container.scrollHeight - scrollHeight;
+    } else if (!prepend) {
+      container.scrollTop = container.scrollHeight;
+    }
+
+    messageOffset += MESSAGE_LIMIT;
+  } catch (err) {
+    console.error('Load messages error:', err);
+  } finally {
+    loadMoreDiv.remove();
+    isLoadingMore = false;
+  }
+}
+
+async function markMessagesAsRead(partnerId) {
+  try {
+    await supabase
+      .from('messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('sender_id', partnerId)
+      .eq('receiver_id', currentUser.id)
+      .is('read_at', null);
+  } catch (err) {
+    console.error('Mark read error:', err);
+  }
+}
+
+// ==================== GROUP CHAT ====================
+async function openGroupChat(groupId, group) {
+  currentGroupId = groupId;
+  currentPartnerId = null;
+  currentChatType = 'group';
+  messageOffset = 0;
+  allMessagesLoaded = false;
+
+  document.querySelectorAll('.conversation-item').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.conversation-item[data-id="${groupId}"][data-type="group"]`)?.classList.add('active');
+
+  const avatarLetter = group.name[0].toUpperCase();
+
+  chatArea.innerHTML = `
+    <div class="chat-header">
+      <button class="back-btn" id="back-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="avatar avatar-sm group-avatar">${escapeHtml(avatarLetter)}</div>
+      <div class="chat-info">
+        <div class="chat-name">${escapeHtml(group.name)}</div>
+        <div class="chat-status" id="chat-status-text">مجموعة</div>
+      </div>
+      <div class="chat-header-actions">
+        <button title="قائمة" id="chat-menu-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+      </div>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-area">
+      <button title="إيموجي" id="emoji-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
+      <input type="text" id="message-input" placeholder="اكتب رسالة..." autocomplete="off">
+      <button class="send-btn" id="send-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  `;
+
+  document.getElementById('back-btn')?.addEventListener('click', () => {
+    chatArea.classList.remove('active');
+    currentGroupId = null;
+    currentChatType = null;
+  });
+  if (window.innerWidth <= 768) chatArea.classList.add('active');
+
+  const messagesContainer = document.getElementById('chat-messages');
+  await loadMoreMessages(messagesContainer, groupId, 'group');
+
+  messagesContainer.addEventListener('scroll', async () => {
+    if (messagesContainer.scrollTop < 50 && !isLoadingMore && !allMessagesLoaded) {
+      await loadMoreMessages(messagesContainer, groupId, 'group', true);
+    }
+  });
+
+  const sendBtn = document.getElementById('send-btn');
+  const input = document.getElementById('message-input');
+
+  const sendMessage = async () => {
+    const content = input.value.trim();
+    if (!content) return;
+    input.value = '';
+    input.focus();
+
+    const tempId = 'temp-' + Date.now();
+    const tempMsg = { 
+      id: null, sender_id: currentUser.id, content, 
+      created_at: new Date().toISOString(), tempId,
+      edited_at: null, deleted: false
+    };
+    renderMessage(tempMsg, messagesContainer);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    try {
+      const { data, error } = await supabase.from('group_messages').insert({ 
+        group_id: groupId, sender_id: currentUser.id, content 
+      }).select().single();
+
+      if (error) { 
+        alert('فشل إرسال الرسالة: ' + classifyError(error).msg); 
+        return;
+      }
+
+      const tempEl = document.querySelector(`[data-temp-id="${tempId}"]`);
+      if (tempEl) {
+        tempEl.dataset.msgId = data.id;
+        delete tempEl.dataset.tempId;
+      }
+      updateConversationPreview(groupId, 'group', content, new Date());
+    } catch (err) {
+      alert('فشل إرسال الرسالة: ' + classifyError(err).msg);
+    }
+  };
+
+  sendBtn.addEventListener('click', sendMessage);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+  if (chatRealtimeChannel) supabase.removeChannel(chatRealtimeChannel);
+  chatRealtimeChannel = supabase
+    .channel(`group-${groupId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_messages' }, (payload) => {
+      const msg = payload.new;
+      if (msg.group_id !== groupId) return;
+      if (document.querySelector(`[data-msg-id="${msg.id}"]`)) return;
+      renderMessage(msg, messagesContainer);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      if (msg.sender_id !== currentUser.id) {
+        updateConversationPreview(groupId, 'group', msg.content, msg.created_at);
+      }
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'group_messages' }, (payload) => {
+      const msg = payload.new;
+      const el = document.querySelector(`[data-msg-id="${msg.id}"]`);
+      if (el) {
+        const contentDiv = el.querySelector('.msg-content');
+        if (contentDiv) {
+          contentDiv.textContent = msg.deleted ? 'تم حذف هذه الرسالة' : msg.content;
+          if (msg.deleted) el.classList.add('deleted');
+        }
+        const editedSpan = el.querySelector('.message-edited');
+        if (editedSpan && msg.edited_at) editedSpan.style.display = 'inline';
+      }
+    })
+    .subscribe();
+}
+
+// ==================== RENDER MESSAGE ====================
+function renderMessage(msg, container, prepend = false) {
   if (msg.id && document.querySelector(`[data-msg-id="${msg.id}"]`)) return;
   if (msg.tempId && document.querySelector(`[data-temp-id="${msg.tempId}"]`)) return;
 
   const isSent = msg.sender_id === currentUser.id;
+  const isDeleted = msg.deleted;
+  const isEdited = !!msg.edited_at;
+  const isRead = !!msg.read_at;
+
   const row = document.createElement('div');
   row.className = `message-row ${isSent ? 'sent' : 'received'}`;
 
   const div = document.createElement('div');
-  div.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
+  div.className = `message-bubble ${isSent ? 'sent' : 'received'} ${isDeleted ? 'deleted' : ''}`;
   div.innerHTML = `
-    <div>${escapeHtml(msg.content)}</div>
+    <div class="msg-content">${escapeHtml(isDeleted ? 'تم حذف هذه الرسالة' : msg.content)}</div>
     <div class="message-meta">
       <span class="message-time">${formatMessageTime(msg.created_at)}</span>
-      ${isSent ? `<span class="message-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span>` : ''}
+      ${isEdited ? '<span class="message-edited" style="display:inline;">تم التعديل</span>' : '<span class="message-edited" style="display:none;">تم التعديل</span>'}
+      ${isSent ? `<span class="message-check ${isRead ? 'read' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span>` : ''}
     </div>
   `;
   if (msg.id) div.dataset.msgId = msg.id;
   if (msg.tempId) div.dataset.tempId = msg.tempId;
+
+  // Context menu for own messages
+  if (isSent && !isDeleted) {
+    div.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showContextMenu(e, msg.id, msg.content, msg.group_id ? 'group' : 'direct');
+    });
+    div.addEventListener('click', (e) => {
+      if (e.detail === 2) { // double click
+        showContextMenu(e, msg.id, msg.content, msg.group_id ? 'group' : 'direct');
+      }
+    });
+  }
+
   row.appendChild(div);
-  container.appendChild(row);
+  if (prepend) container.insertBefore(row, container.firstChild);
+  else container.appendChild(row);
 }
 
+// ==================== CONTEXT MENU ====================
+const contextMenu = document.getElementById('msg-context-menu');
+function showContextMenu(e, msgId, content, type) {
+  contextMenuTarget = { msgId, content, type };
+  contextMenu.style.left = e.pageX + 'px';
+  contextMenu.style.top = e.pageY + 'px';
+  contextMenu.classList.add('active');
+}
+document.addEventListener('click', () => contextMenu.classList.remove('active'));
+
+document.getElementById('ctx-edit').addEventListener('click', async () => {
+  if (!contextMenuTarget) return;
+  currentEditingMsgId = contextMenuTarget.msgId;
+  document.getElementById('edit-msg-input').value = contextMenuTarget.content;
+  document.getElementById('edit-msg-modal').classList.add('active');
+});
+
+document.getElementById('ctx-delete').addEventListener('click', async () => {
+  if (!contextMenuTarget) return;
+  if (!confirm('هل أنت متأكد من حذف هذه الرسالة؟')) return;
+  try {
+    const table = contextMenuTarget.type === 'group' ? 'group_messages' : 'messages';
+    await supabase.from(table).update({ deleted: true }).eq('id', contextMenuTarget.msgId);
+  } catch (err) {
+    alert('فشل الحذف: ' + classifyError(err).msg);
+  }
+});
+
+// Edit Modal
+document.getElementById('edit-msg-cancel').addEventListener('click', () => {
+  document.getElementById('edit-msg-modal').classList.remove('active');
+  currentEditingMsgId = null;
+});
+document.getElementById('edit-msg-save').addEventListener('click', async () => {
+  if (!currentEditingMsgId) return;
+  const newContent = document.getElementById('edit-msg-input').value.trim();
+  if (!newContent) return;
+  try {
+    const table = currentChatType === 'group' ? 'group_messages' : 'messages';
+    await supabase.from(table).update({ content: newContent, edited_at: new Date().toISOString() }).eq('id', currentEditingMsgId);
+    document.getElementById('edit-msg-modal').classList.remove('active');
+    currentEditingMsgId = null;
+  } catch (err) {
+    document.getElementById('edit-msg-error').textContent = classifyError(err).msg;
+  }
+});
+
+// ==================== GLOBAL REALTIME ====================
 function setupGlobalRealtime() {
   if (globalRealtimeChannel) supabase.removeChannel(globalRealtimeChannel);
   globalRealtimeChannel = supabase
-    .channel('global-messages-' + currentUser.id)
+    .channel('global-' + currentUser.id)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
       const msg = payload.new;
       if (msg.receiver_id !== currentUser.id) return;
       const partnerId = msg.sender_id;
-      if (conversationMap.has(partnerId)) {
-        updateConversationPreview(partnerId, msg.content, msg.created_at);
+      if (conversationMap.has(`direct-${partnerId}`)) {
+        updateConversationPreview(partnerId, 'direct', msg.content, msg.created_at);
       } else {
         try {
           const { data: profile } = await supabase.from('profiles').select('*').eq('id', partnerId).single();
           if (profile) {
-            renderConversation(partnerId, profile, msg, true);
-            const empty = conversationsList.querySelector('.empty-state');
-            if (empty) empty.remove();
+            renderConversation(partnerId, profile, msg, 'direct', true);
           }
         } catch (err) {
           console.error('Profile fetch error:', err);
         }
       }
     })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_messages' }, async (payload) => {
+      const msg = payload.new;
+      if (msg.sender_id === currentUser.id) return;
+      // Check if user is member of this group
+      const { data: member } = await supabase.from('group_members').select('*').eq('group_id', msg.group_id).eq('user_id', currentUser.id).single();
+      if (!member) return;
+
+      if (conversationMap.has(`group-${msg.group_id}`)) {
+        updateConversationPreview(msg.group_id, 'group', msg.content, msg.created_at);
+      } else {
+        const { data: group } = await supabase.from('groups').select('*').eq('id', msg.group_id).single();
+        if (group) renderConversation(msg.group_id, group, msg, 'group', true);
+      }
+    })
     .subscribe();
 }
 
-// ==================== NEW CHAT MODAL ====================
-const newChatModal = document.getElementById('new-chat-modal');
-const chatSearchInput = document.getElementById('chat-search-input');
-const chatSearchBtn = document.getElementById('chat-search-btn');
-const chatSearchResults = document.getElementById('chat-search-results');
-const chatSearchError = document.getElementById('chat-search-error');
-
-document.getElementById('new-chat-btn').addEventListener('click', () => {
-  newChatModal.classList.add('active');
-  chatSearchInput.value = '';
-  chatSearchResults.innerHTML = '';
-  chatSearchError.textContent = '';
-  chatSearchInput.focus();
+// ==================== ADD CONTACT ====================
+const addContactModal = document.getElementById('add-contact-modal');
+document.getElementById('add-contact-btn').addEventListener('click', () => {
+  addContactModal.classList.add('active');
+  document.getElementById('add-contact-input').value = '';
+  document.getElementById('add-contact-results').innerHTML = '';
+  document.getElementById('add-contact-error').textContent = '';
+  document.getElementById('add-contact-input').focus();
+});
+document.getElementById('add-contact-cancel').addEventListener('click', () => {
+  addContactModal.classList.remove('active');
 });
 
-document.getElementById('chat-search-cancel').addEventListener('click', () => {
-  newChatModal.classList.remove('active');
-});
-
-async function searchUsers() {
-  const query = chatSearchInput.value.trim();
+async function searchAndAddContact() {
+  const query = document.getElementById('add-contact-input').value.trim();
   if (!query) return;
-  chatSearchBtn.disabled = true;
-  chatSearchBtn.textContent = 'جاري البحث...';
-  chatSearchError.textContent = '';
-  chatSearchResults.innerHTML = '';
+  const btn = document.getElementById('add-contact-search-btn');
+  btn.disabled = true;
+  btn.textContent = 'جاري البحث...';
+  document.getElementById('add-contact-error').textContent = '';
+  document.getElementById('add-contact-results').innerHTML = '';
 
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .ilike('username', `%${query}%`)
-      .neq('id', currentUser.id)
-      .limit(10);
+    let data;
+    // Search by phone or username
+    if (query.startsWith('+') || /^[0-9]/.test(query)) {
+      const { data: byPhone } = await supabase.from('profiles').select('*').ilike('phone', `%${query}%`).neq('id', currentUser.id).limit(10);
+      data = byPhone;
+    } else {
+      const { data: byName } = await supabase.from('profiles').select('*').ilike('username', `%${query}%`).neq('id', currentUser.id).limit(10);
+      data = byName;
+    }
 
-    chatSearchBtn.disabled = false;
-    chatSearchBtn.textContent = 'بحث';
+    btn.disabled = false;
+    btn.textContent = 'بحث';
 
-    if (error) { chatSearchError.textContent = classifyError(error).msg; return; }
-    if (!data || data.length === 0) { chatSearchError.textContent = 'لم يتم العثور على مستخدمين'; return; }
+    if (!data || data.length === 0) {
+      document.getElementById('add-contact-error').textContent = 'لم يتم العثور على مستخدمين';
+      return;
+    }
 
     for (const profile of data) {
       const avatarLetter = (profile.display_name || profile.username || 'م')[0].toUpperCase();
@@ -1001,58 +1488,133 @@ async function searchUsers() {
         <div class="avatar avatar-sm">${avatarHtml}</div>
         <div>
           <div class="name">${escapeHtml(profile.display_name || profile.username)}</div>
-          <div class="handle">@${profile.username}</div>
+          <div class="handle">@${profile.username} | ${profile.phone || ''}</div>
+        </div>
+      `;
+      div.addEventListener('click', async () => {
+        // Add to contacts
+        try {
+          await supabase.from('contacts').insert({ 
+            user_id: currentUser.id, contact_id: profile.id, phone: profile.phone, display_name: profile.display_name 
+          });
+          // Also add to follows for group creation
+          await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: profile.id }).catch(() => {});
+          alert('تمت الإضافة بنجاح!');
+          addContactModal.classList.remove('active');
+          if (!conversationMap.has(`direct-${profile.id}`)) {
+            renderConversation(profile.id, profile, { content: 'ابدأ المحادثة...', created_at: new Date().toISOString() }, 'direct', true);
+          }
+        } catch (err) {
+          document.getElementById('add-contact-error').textContent = classifyError(err).msg;
+        }
+      });
+      document.getElementById('add-contact-results').appendChild(div);
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'بحث';
+    document.getElementById('add-contact-error').textContent = classifyError(err).msg;
+  }
+}
+document.getElementById('add-contact-search-btn').addEventListener('click', searchAndAddContact);
+document.getElementById('add-contact-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchAndAddContact(); });
+
+// ==================== NEW CHAT ====================
+const newChatModal = document.getElementById('new-chat-modal');
+document.getElementById('new-chat-btn').addEventListener('click', () => {
+  newChatModal.classList.add('active');
+  document.getElementById('chat-search-input').value = '';
+  document.getElementById('chat-search-results').innerHTML = '';
+  document.getElementById('chat-search-error').textContent = '';
+  document.getElementById('chat-search-input').focus();
+});
+document.getElementById('chat-search-cancel').addEventListener('click', () => {
+  newChatModal.classList.remove('active');
+});
+
+async function searchUsers() {
+  const query = document.getElementById('chat-search-input').value.trim();
+  if (!query) return;
+  const btn = document.getElementById('chat-search-btn');
+  btn.disabled = true;
+  btn.textContent = 'جاري البحث...';
+  document.getElementById('chat-search-error').textContent = '';
+  document.getElementById('chat-search-results').innerHTML = '';
+
+  try {
+    let data;
+    if (query.startsWith('+') || /^[0-9]/.test(query)) {
+      const { data: byPhone } = await supabase.from('profiles').select('*').ilike('phone', `%${query}%`).neq('id', currentUser.id).limit(10);
+      data = byPhone;
+    } else {
+      const { data: byName } = await supabase.from('profiles').select('*').ilike('username', `%${query}%`).neq('id', currentUser.id).limit(10);
+      data = byName;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'بحث';
+
+    if (!data || data.length === 0) { document.getElementById('chat-search-error').textContent = 'لم يتم العثور على مستخدمين'; return; }
+
+    for (const profile of data) {
+      const avatarLetter = (profile.display_name || profile.username || 'م')[0].toUpperCase();
+      const avatarHtml = profile.avatar_url ? `<img src="${escapeHtml(profile.avatar_url)}" alt="">` : escapeHtml(avatarLetter);
+      const div = document.createElement('div');
+      div.className = 'search-result-item';
+      div.innerHTML = `
+        <div class="avatar avatar-sm">${avatarHtml}</div>
+        <div>
+          <div class="name">${escapeHtml(profile.display_name || profile.username)}</div>
+          <div class="handle">@${profile.username} | ${profile.phone || ''}</div>
         </div>
       `;
       div.addEventListener('click', () => {
         newChatModal.classList.remove('active');
-        if (!conversationMap.has(profile.id)) {
-          renderConversation(profile.id, profile, { content: 'ابدأ المحادثة...', created_at: new Date().toISOString() }, true);
-          const empty = conversationsList.querySelector('.empty-state');
-          if (empty) empty.remove();
+        if (!conversationMap.has(`direct-${profile.id}`)) {
+          renderConversation(profile.id, profile, { content: 'ابدأ المحادثة...', created_at: new Date().toISOString() }, 'direct', true);
         }
         openChat(profile.id, profile);
       });
-      chatSearchResults.appendChild(div);
+      document.getElementById('chat-search-results').appendChild(div);
     }
   } catch (err) {
-    chatSearchBtn.disabled = false;
-    chatSearchBtn.textContent = 'بحث';
-    chatSearchError.textContent = classifyError(err).msg;
+    btn.disabled = false;
+    btn.textContent = 'بحث';
+    document.getElementById('chat-search-error').textContent = classifyError(err).msg;
   }
 }
+document.getElementById('chat-search-btn').addEventListener('click', searchUsers);
+document.getElementById('chat-search-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchUsers(); });
 
-chatSearchBtn.addEventListener('click', searchUsers);
-chatSearchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') searchUsers(); });
-
-// ==================== NEW GROUP MODAL ====================
+// ==================== NEW GROUP ====================
 const newGroupModal = document.getElementById('new-group-modal');
-const groupNameInput = document.getElementById('group-name-input');
-const groupMemberSelect = document.getElementById('group-member-select');
-const groupMembersLoading = document.getElementById('group-members-loading');
-const groupError = document.getElementById('group-error');
-
 document.getElementById('new-group-btn').addEventListener('click', async () => {
   newGroupModal.classList.add('active');
-  groupNameInput.value = '';
-  groupError.textContent = '';
-  groupMemberSelect.innerHTML = '';
-  groupMembersLoading.style.display = 'block';
+  document.getElementById('group-name-input').value = '';
+  document.getElementById('group-error').textContent = '';
+  document.getElementById('group-member-select').innerHTML = '';
+  document.getElementById('group-members-loading').style.display = 'block';
 
   try {
-    const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', currentUser.id);
-    const followingIds = (follows || []).map(f => f.following_id);
-    if (followingIds.length === 0) {
-      groupMembersLoading.style.display = 'none';
-      groupMemberSelect.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:13px;">تابع مستخدمين أولاًّ لإضافتهم للمجموعة.</div>';
+    // Load contacts instead of follows
+    const { data: contacts } = await supabase
+      .from('contacts')
+      .select('contact_id, display_name, phone')
+      .eq('user_id', currentUser.id);
+
+    const contactIds = (contacts || []).map(c => c.contact_id);
+    if (contactIds.length === 0) {
+      document.getElementById('group-members-loading').style.display = 'none';
+      document.getElementById('group-member-select').innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:13px;">أضف جهات اتصال أولاً لإنشاء مجموعة.</div>';
       return;
     }
+
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, username, display_name, avatar_url')
-      .in('id', followingIds);
+      .in('id', contactIds);
 
-    groupMembersLoading.style.display = 'none';
+    document.getElementById('group-members-loading').style.display = 'none';
     for (const p of profiles || []) {
       const avatarLetter = (p.display_name || p.username || 'م')[0].toUpperCase();
       const avatarHtml = p.avatar_url ? `<img src="${escapeHtml(p.avatar_url)}" alt="">` : escapeHtml(avatarLetter);
@@ -1063,11 +1625,11 @@ document.getElementById('new-group-btn').addEventListener('click', async () => {
         <div class="avatar avatar-sm">${avatarHtml}</div>
         <span style="flex:1;font-size:14px;">${escapeHtml(p.display_name || p.username)}</span>
       `;
-      groupMemberSelect.appendChild(label);
+      document.getElementById('group-member-select').appendChild(label);
     }
   } catch (err) {
-    groupMembersLoading.style.display = 'none';
-    groupError.textContent = classifyError(err).msg;
+    document.getElementById('group-members-loading').style.display = 'none';
+    document.getElementById('group-error').textContent = classifyError(err).msg;
   }
 });
 
@@ -1076,13 +1638,29 @@ document.getElementById('group-cancel').addEventListener('click', () => {
 });
 
 document.getElementById('group-create').addEventListener('click', async () => {
-  const name = groupNameInput.value.trim();
-  if (!name) { groupError.textContent = 'أدخل اسم المجموعة'; return; }
+  const name = document.getElementById('group-name-input').value.trim();
+  if (!name) { document.getElementById('group-error').textContent = 'أدخل اسم المجموعة'; return; }
   const checked = Array.from(document.querySelectorAll('.group-member-check:checked')).map(cb => cb.value);
-  if (checked.length === 0) { groupError.textContent = 'اختر عضو واحد على الأقل'; return; }
+  if (checked.length === 0) { document.getElementById('group-error').textContent = 'اختر عضو واحد على الأقل'; return; }
 
-  alert('يتطلب إنشاء المجموعة جداول خلفية (groups, group_members, group_messages). يرجى إعدادها في Supabase أولاًّ. الأعضاء المختارين: ' + checked.length);
-  newGroupModal.classList.remove('active');
+  try {
+    const { data: group, error } = await supabase.from('groups').insert({ 
+      name, creator_id: currentUser.id 
+    }).select().single();
+
+    if (error) { document.getElementById('group-error').textContent = classifyError(error).msg; return; }
+
+    // Add creator + members
+    const members = [currentUser.id, ...checked];
+    const memberRows = members.map(uid => ({ group_id: group.id, user_id: uid }));
+    await supabase.from('group_members').insert(memberRows);
+
+    newGroupModal.classList.remove('active');
+    renderConversation(group.id, group, { content: 'مجموعة جديدة', created_at: group.created_at }, 'group', true);
+    openGroupChat(group.id, group);
+  } catch (err) {
+    document.getElementById('group-error').textContent = classifyError(err).msg;
+  }
 });
 
 // ==================== SIDEBAR SEARCH ====================
@@ -1095,57 +1673,37 @@ document.getElementById('sidebar-search').addEventListener('input', (e) => {
   });
 });
 
-// ==================== POLLING ====================
+// ==================== POLLING (Optimized) ====================
 function startPolling() {
   pollIntervals.forEach(clearInterval);
   pollIntervals = [];
 
-  const chatPoll = setInterval(async () => {
-    if (!currentPartnerId || !currentUser) return;
-    try {
-      const { data: newMsgs } = await supabase
-        .from('messages')
-        .select('*')
-        .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${currentPartnerId}),and(sender_id.eq.${currentPartnerId},receiver_id.eq.${currentUser.id})`)
-        .order('created_at', { ascending: true });
-      const container = document.getElementById('chat-messages');
-      if (!container || !newMsgs) return;
-      let added = 0;
-      for (const msg of newMsgs) {
-        if (msg.id && !document.querySelector(`[data-msg-id="${msg.id}"]`)) {
-          renderMessage(msg, container);
-          added++;
-        }
-      }
-      if (added > 0) container.scrollTop = container.scrollHeight;
-    } catch (err) {
-      console.error('Chat poll error:', err);
-    }
-  }, 5000);
-  pollIntervals.push(chatPoll);
-
   const convPoll = setInterval(async () => {
     if (!currentUser) return;
     try {
-      const { data } = await supabase
+      // Poll only latest messages
+      const { data: msgs } = await supabase
         .from('messages')
         .select('sender_id, receiver_id, content, created_at')
         .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
-        .order('created_at', { ascending: false });
+        .eq('deleted', false)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
       const partnerMap = new Map();
-      for (const msg of data || []) {
+      for (const msg of msgs || []) {
         const partnerId = msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
         if (!partnerMap.has(partnerId)) partnerMap.set(partnerId, msg);
       }
       for (const [partnerId, lastMsg] of partnerMap) {
-        if (conversationMap.has(partnerId)) {
-          updateConversationPreview(partnerId, lastMsg.content, lastMsg.created_at);
+        if (conversationMap.has(`direct-${partnerId}`)) {
+          updateConversationPreview(partnerId, 'direct', lastMsg.content, lastMsg.created_at);
         }
       }
     } catch (err) {
       console.error('Conv poll error:', err);
     }
-  }, 10000);
+  }, 15000);
   pollIntervals.push(convPoll);
 }
 

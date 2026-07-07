@@ -1,0 +1,16 @@
+name: HTML to APK
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Convert HTML to APK
+        uses: canewsin/website-to-apk-action@v1
+        with:
+          build-folder-path: './'
+          app-name: 'NexSend'
+          package-name: 'com.whitefoxstudios.nexsend'
